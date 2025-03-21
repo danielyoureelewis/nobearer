@@ -16,6 +16,14 @@ class BurpExtender(IBurpExtender, IHttpListener):
         request = self._helpers.analyzeRequest(requestResponse)
         headers = request.getHeaders()
 
+        bearer_in_req = False
+        for h in headers:
+            if h.lower().startswith("authorization"):
+                bearer_in_req = True
+        if not bearer_in_req:
+            print("no bearer token found")
+            return
+        print("bearer")
         # Remove Authorization header
         new_headers = [h for h in headers if not h.lower().startswith("authorization")]
         body = requestResponse.getRequest()[request.getBodyOffset():]
