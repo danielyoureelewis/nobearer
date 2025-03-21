@@ -1,4 +1,4 @@
-from burp import IBurpExtender, IHttpListener
+from burp import IBurpExtender, IHttpListener, IScanIssue
 from java.net import URL
 from java.util import ArrayList
 
@@ -30,17 +30,18 @@ class BurpExtender(IBurpExtender, IHttpListener):
         status_code = response_info.getStatusCode()
 
         if status_code == 200:
-            self._callbacks.addScanIssue(CustomScanIssue(
+            issue = CustomScanIssue(
                 httpService,
                 self._helpers.analyzeRequest(modified_response).getUrl(),
                 [modified_response],  # Include request/response
                 "Authentication Bypass",
                 "Removing the Authorization header still returned 200 OK. This could indicate a potential authentication bypass vulnerability.",
                 "High"
-            ))
+            )
+            self._callbacks.addScanIssue(issue)  # Corrected: Issue now implements IScanIssue fully
 
-# Define CustomScanIssue without importing IScannerIssue
-class CustomScanIssue:
+# Implement IScanIssue properly
+class CustomScanIssue(IScanIssue):
     def __init__(self, httpService, url, httpMessages, name, detail, severity):
         self._httpService = httpService
         self._url = url
@@ -62,13 +63,19 @@ class CustomScanIssue:
         return self._severity
 
     def getConfidence(self):
-        return "Firm"
+        return "Tentative"
 
     def getIssueDetail(self):
         return self._detail
 
+    def getIssueBackground(self):
+        return "Authentication bypass occurs when a protected resource is accessible without proper credentials. This may allow unauthorized users to access restricted data or functionality."
+
     def getRemediationDetail(self):
-        return "Ensure authentication is enforced on protected resources."
+        return "Ensure that all protected resources enforce authentication and authorization properly."
+
+    def getRemediationBackground(self):
+        return "To mitigate this issue, implement strict authentication checks at both the client and server levels. Consider using session tokens, OAuth, or API key verification."
 
     def getHttpMessages(self):
         return self._httpMessages
