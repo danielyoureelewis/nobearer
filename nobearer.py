@@ -1,77 +1,38 @@
-from burp import IBurpExtender, IHttpListener, IScannerInsertionPointProvider, IScannerIssue
-from java.net import URL
-from java.util import ArrayList
+from burp.api.montoya import BurpExtender as MontoyaExtender
+from burp.api.montoya.http.handler import HttpHandler
+from burp.api.montoya.http.message.requests import HttpRequest
+from burp.api.montoya.http.message.responses import HttpResponse
+from burp.api.montoya.core import Registration
+from burp.api.montoya.scanner import AuditIssue, AuditIssueSeverity, AuditIssueConfidence
 
-class BurpExtender(IBurpExtender, IHttpListener):
-    def registerExtenderCallbacks(self, callbacks):
-        self._callbacks = callbacks
-        self._helpers = callbacks.getHelpers()
-        callbacks.setExtensionName("Auth Bypass Detector")
-        callbacks.registerHttpListener(self)
+class BurpExtender(MontoyaExtender, HttpHandler):
+    def initialize(self, callbacks):
+        self.callbacks = callbacks
+        self.api = callbacks.api()
+        self.api.extension().set_name("Auth Bypass Detector")
+        self.api.http().registerHttpHandler(self)
 
-    def processHttpMessage(self, toolFlag, messageIsRequest, requestResponse):
-        if not messageIsRequest:  # Only process responses
-            return
-        
-        request = self._helpers.analyzeRequest(requestResponse)
-        headers = request.getHeaders()
-
+    def handleHttpRequest(self, request: HttpRequest, registration: Registration):
         # Remove Authorization header
+        headers = request.headers()
         new_headers = [h for h in headers if not h.lower().startswith("authorization")]
-        body = requestResponse.getRequest()[request.getBodyOffset():]
-        modified_request = self._helpers.buildHttpMessage(new_headers, body)
+        modified_request = request.with_headers(new_headers)
 
-        # Send the modified request
-        httpService = requestResponse.getHttpService()
-        modified_response = self._callbacks.makeHttpRequest(httpService, modified_request)
+        # Send modified request
+        httpService = request.http_service()
+        modified_response = self.api.http().send_request(modified_request)
 
-        # Analyze the response
-        response_info = self._helpers.analyzeResponse(modified_response.getResponse())
-        status_code = response_info.getStatusCode()
-
-        # If unauthorized request succeeds, create an issue
-        if status_code == 200:
-            self._callbacks.addScanIssue(CustomScanIssue(
+        # Check response status
+        if modified_response.status_code() == 200:
+            issue = AuditIssue(
                 httpService,
-                self._helpers.analyzeRequest(modified_response).getUrl(),
-                [modified_response],  # Highlight request/response
+                request.url(),
+                [modified_request, modified_response],
                 "Authentication Bypass",
-                "Removing the Authorization header still returned 200 OK. This could indicate a potential authentication bypass vulnerability.",
-                "High"
-            ))
+                "Removing the Authorization header still returned 200 OK, indicating a possible authentication bypass vulnerability.",
+                AuditIssueSeverity.HIGH,
+                AuditIssueConfidence.FIRM
+            )
+            self.api.scanner().report_issue(issue)
 
-class CustomScanIssue(IScannerIssue):
-    def __init__(self, httpService, url, httpMessages, name, detail, severity):
-        self._httpService = httpService
-        self._url = url
-        self._httpMessages = httpMessages
-        self._name = name
-        self._detail = detail
-        self._severity = severity
-
-    def getUrl(self):
-        return self._url
-
-    def getIssueName(self):
-        return self._name
-
-    def getIssueType(self):
-        return 0
-
-    def getSeverity(self):
-        return self._severity
-
-    def getConfidence(self):
-        return "Firm"
-
-    def getIssueDetail(self):
-        return self._detail
-
-    def getRemediationDetail(self):
-        return "Ensure that authentication is strictly enforced on protected resources."
-
-    def getHttpMessages(self):
-        return self._httpMessages
-
-    def getHttpService(self):
-        return self._httpService
+        return request  # Forward original request
