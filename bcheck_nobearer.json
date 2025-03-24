@@ -20,7 +20,7 @@
         {
           "name": "Authentication Bypass",
           "severity": "High",
-          "confidence": "Firm",
+          "confidence": "Tentative",
           "detail": "Removing the Authorization header still returned 200 OK. This could indicate a potential authentication bypass vulnerability.",
           "background": "Authentication bypass occurs when a protected resource is accessible without proper credentials. This may allow unauthorized users to access restricted data or functionality.",
           "remediation": "Ensure that all protected resources enforce authentication and authorization properly.",
