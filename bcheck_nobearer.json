@@ -1,0 +1,32 @@
+{
+  "name": "Auth Bypass Detection",
+  "description": "Detects authentication bypass by removing Authorization headers and checking for 200 OK responses.",
+  "author": "Daniel Lewis",
+  "version": "1.0",
+  "requests": [
+    {
+      "match": ".*",
+      "modifications": [
+        {
+          "remove_header": "Authorization"
+        }
+      ],
+      "assertions": [
+        {
+          "response_code": 200
+        }
+      ],
+      "issues": [
+        {
+          "name": "Authentication Bypass",
+          "severity": "High",
+          "confidence": "Firm",
+          "detail": "Removing the Authorization header still returned 200 OK. This could indicate a potential authentication bypass vulnerability.",
+          "background": "Authentication bypass occurs when a protected resource is accessible without proper credentials. This may allow unauthorized users to access restricted data or functionality.",
+          "remediation": "Ensure that all protected resources enforce authentication and authorization properly.",
+          "remediation_background": "To mitigate this issue, implement strict authentication checks at both the client and server levels. Consider using session tokens, OAuth, or API key verification."
+        }
+      ]
+    }
+  ]
+}
